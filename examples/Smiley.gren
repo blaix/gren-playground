@@ -1,5 +1,6 @@
-import Playground exposing (..)
+module Smiley exposing (main)
 
+import Playground exposing (..)
 
 
 main =

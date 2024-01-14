@@ -92,6 +92,7 @@ import Browser.Dom as Dom
 import Browser.Events as E
 import Html
 import Html.Attributes as H
+import Math exposing (..)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import Json.Decode as D
@@ -116,24 +117,26 @@ import Time
         ]
 
 -}
-picture : List Shape -> Program () Screen (Int, Int)
+picture : Array Shape -> Program {} Screen { width : Int, height : Int }
 picture shapes =
   let
-    init () =
-      (toScreen 600 600, Cmd.none)
+    init {} =
+      { model = toScreen 600 600
+      , command = Cmd.none
+      }
 
     view screen =
       { title = "Playground"
       , body = [ render screen shapes ]
       }
 
-    update (width,height) _ =
-      ( toScreen (toFloat width) (toFloat height)
-      , Cmd.none
-      )
+    update { width, height } _ =
+      { model = toScreen (toFloat width) (toFloat height)
+      , command = Cmd.none
+      }
 
     subscriptions _ =
-      E.onResize Tuple.pair
+      E.onResize (\w h -> { width = w, height = h })
   in
   Browser.document
     { init = init
@@ -214,7 +217,7 @@ If someone is pressing the UP and RIGHT arrows, you will see a value like this:
 
     { up = True, down = False, left = False, right = True
     , space = False, enter = False, shift = False, backspace = False
-    , keys = Set.fromList ["ArrowUp","ArrowRight"]
+    , keys = Set.fromArray ["ArrowUp","ArrowRight"]
     }
 
 So if you want to move a character based on arrows, you could write an update
@@ -339,16 +342,18 @@ Now when you go up/right, you are still going 1 pixel per update.
       (x + dx, y + dy)
 
 -}
-toXY : Keyboard -> (Number, Number)
+toXY : Keyboard -> { x : Number, y : Number }
 toXY keyboard =
   let
     x = toX keyboard
     y = toY keyboard
   in
   if x /= 0 && y /= 0 then
-    (x / squareRootOfTwo, y / squareRootOfTwo)
+    { x = x / squareRootOfTwo
+    , y = y / squareRootOfTwo
+    }
   else
-    (x,y)
+    { x = x, y = y }
 
 
 squareRootOfTwo : Number
@@ -494,13 +499,13 @@ We need to define a `view` to make our animation work.
 Within `view` we can use functions like [`spin`](#spin), [`wave`](#wave),
 and [`zigzag`](#zigzag) to move and rotate our shapes.
 -}
-animation : (Time -> List Shape) -> Program () Animation Msg
+animation : (Time -> Array Shape) -> Program {} Animation Msg
 animation viewFrame =
   let
-    init () =
-      ( Animation E.Visible (toScreen 600 600) (Time (Time.millisToPosix 0))
-      , Task.perform GotViewport Dom.getViewport
-      )
+    init {} =
+      { model = Animation E.Visible (toScreen 600 600) (Time (Time.millisToPosix 0))
+      , command = Task.perform GotViewport Dom.getViewport
+      }
 
     view (Animation _ screen time) =
       { title = "Playground"
@@ -508,9 +513,9 @@ animation viewFrame =
       }
 
     update msg model =
-      ( animationUpdate msg model
-      , Cmd.none
-      )
+      { model = animationUpdate msg model
+      , command = Cmd.none
+      }
 
     subscriptions (Animation visibility _ _) =
       case visibility of
@@ -612,13 +617,13 @@ moves based on the arrow keys:
 Notice that in the `update` we use information from the keyboard to update the
 `x` and `y` values. These building blocks let you make pretty fancy games!
 -}
-game : (Computer -> memory -> List Shape) -> (Computer -> memory -> memory) -> memory -> Program () (Game memory) Msg
+game : (Computer -> memory -> Array Shape) -> (Computer -> memory -> memory) -> memory -> Program {} (Game memory) Msg
 game viewMemory updateMemory initialMemory =
   let
-    init () =
-      ( Game E.Visible initialMemory initialComputer
-      , Task.perform GotViewport Dom.getViewport
-      )
+    init {} =
+      { model = Game E.Visible initialMemory initialComputer
+      , command = Task.perform GotViewport Dom.getViewport
+      }
 
     view (Game _ memory computer) =
       { title = "Playground"
@@ -626,9 +631,9 @@ game viewMemory updateMemory initialMemory =
       }
 
     update msg model =
-      ( gameUpdate updateMemory msg model
-      , Cmd.none
-      )
+      { model = gameUpdate updateMemory msg model
+      , command = Cmd.none
+      }
 
     subscriptions (Game visibility _ _) =
       case visibility of
@@ -648,7 +653,7 @@ game viewMemory updateMemory initialMemory =
 
 initialComputer : Computer
 initialComputer =
-  { mouse = Mouse 0 0 False False
+  { mouse = { x = 0, y = 0, down = False, click = False }
   , keyboard = emptyKeyboard
   , screen = toScreen 600 600
   , time = Time (Time.millisToPosix 0)
@@ -728,7 +733,12 @@ gameUpdate updateMemory msg (Game vis memory computer) =
       Game visibility memory
         { computer
             | keyboard = emptyKeyboard
-            , mouse = Mouse computer.mouse.x computer.mouse.y False False
+            , mouse =
+              { x = computer.mouse.x
+              , y = computer.mouse.y
+              , down = False
+              , click = False
+              }
         }
 
 
@@ -829,10 +839,10 @@ type Form
   | Oval Color Number Number
   | Rectangle Color Number Number
   | Ngon Color Int Number
-  | Polygon Color (List (Number, Number))
+  | Polygon Color (Array { x : Number, y : Number })
   | Image Number Number String
   | Words Color String
-  | Group (List Shape)
+  | Group (Array Shape)
 
 
 {-| Make circles:
@@ -980,7 +990,7 @@ octagon color radius =
 `(0,0)`. So it is best to build your shapes around that point, and then use
 [`move`](#move) or [`group`](#group) so that rotation makes more sense.
 -}
-polygon : Color -> List (Number, Number) -> Shape
+polygon : Color -> Array { x : Number, y : Number } -> Shape
 polygon color points =
   Shape 0 0 0 1 1 (Polygon color points)
 
@@ -1045,7 +1055,7 @@ them as a group. Maybe you want to put a bunch of stars in the sky:
             |> rotate 180
         ]
 -}
-group : List Shape -> Shape
+group : Array Shape -> Shape
 group shapes =
   Shape 0 0 0 1 1 (Group shapes)
 
@@ -1488,7 +1498,7 @@ colorClamp number =
 -- RENDER
 
 
-render : Screen -> List Shape -> Html.Html msg
+render : Screen -> Array Shape -> Html.Html msg
 render screen shapes =
   let
     w = String.fromFloat screen.width
@@ -1504,7 +1514,7 @@ render screen shapes =
     , width "100%"
     , height "100%"
     ]
-    (List.map renderShape shapes)
+    (Array.map renderShape shapes)
 
 
 -- TODO try adding Svg.Lazy to renderShape
@@ -1534,8 +1544,8 @@ renderShape (Shape x y angle s alpha form) =
       renderWords color string x y angle s alpha
 
     Group shapes ->
-      g (transform (renderTransform x y angle s) :: renderAlpha alpha)
-        (List.map renderShape shapes)
+      g ([transform (renderTransform x y angle s)] ++ (renderAlpha alpha))
+        (Array.map renderShape shapes)
 
 
 
@@ -1545,10 +1555,10 @@ renderShape (Shape x y angle s alpha form) =
 renderCircle : Color -> Number -> Number -> Number -> Number -> Number -> Number -> Svg msg
 renderCircle color radius x y angle s alpha =
   Svg.circle
-    (  r (String.fromFloat radius)
-    :: fill (renderColor color)
-    :: transform (renderTransform x y angle s)
-    :: renderAlpha alpha
+    ( [ r (String.fromFloat radius)
+      , fill (renderColor color)
+      , transform (renderTransform x y angle s)
+      ] ++ renderAlpha alpha
     )
     []
 
@@ -1556,11 +1566,11 @@ renderCircle color radius x y angle s alpha =
 renderOval : Color -> Number -> Number -> Number -> Number -> Number -> Number -> Number -> Svg msg
 renderOval color width height x y angle s alpha =
   ellipse
-    (  rx (String.fromFloat (width  / 2))
-    :: ry (String.fromFloat (height / 2))
-    :: fill (renderColor color)
-    :: transform (renderTransform x y angle s)
-    :: renderAlpha alpha
+    ( [ rx (String.fromFloat (width  / 2))
+      , ry (String.fromFloat (height / 2))
+      , fill (renderColor color)
+      , transform (renderTransform x y angle s)
+      ] ++ renderAlpha alpha
     )
     []
 
@@ -1572,11 +1582,11 @@ renderOval color width height x y angle s alpha =
 renderRectangle : Color -> Number -> Number -> Number -> Number -> Number -> Number -> Number -> Svg msg
 renderRectangle color w h x y angle s alpha =
   rect
-    (  width (String.fromFloat w)
-    :: height (String.fromFloat h)
-    :: fill (renderColor color)
-    :: transform (renderRectTransform w h x y angle s)
-    :: renderAlpha alpha
+    ( [ width (String.fromFloat w)
+      , height (String.fromFloat h)
+      , fill (renderColor color)
+      , transform (renderRectTransform w h x y angle s)
+      ] ++ renderAlpha alpha
     )
     []
 
@@ -1590,11 +1600,11 @@ renderRectTransform width height x y angle s =
 renderImage : Number -> Number -> String -> Number -> Number -> Number -> Number -> Number -> Svg msg
 renderImage w h src x y angle s alpha =
   Svg.image
-    (  xlinkHref src
-    :: width (String.fromFloat w)
-    :: height (String.fromFloat h)
-    :: transform (renderRectTransform w h x y angle s)
-    :: renderAlpha alpha
+    ( [ xlinkHref src
+      , width (String.fromFloat w)
+      , height (String.fromFloat h)
+      , transform (renderRectTransform w h x y angle s)
+      ] ++ renderAlpha alpha
     )
     []
 
@@ -1606,10 +1616,10 @@ renderImage w h src x y angle s alpha =
 renderNgon : Color -> Int -> Number -> Number -> Number -> Number -> Number -> Number -> Svg msg
 renderNgon color n radius x y angle s alpha =
   Svg.polygon
-    (  points (toNgonPoints 0 n radius "")
-    :: fill (renderColor color)
-    :: transform (renderTransform x y angle s)
-    :: renderAlpha alpha
+    ( [ points (toNgonPoints 0 n radius "")
+      , fill (renderColor color)
+      , transform (renderTransform x y angle s)
+      ] ++ renderAlpha alpha
     )
     []
 
@@ -1631,19 +1641,20 @@ toNgonPoints i n radius string =
 -- RENDER POLYGON
 
 
-renderPolygon : Color -> List (Number, Number) -> Number -> Number -> Number -> Number -> Number -> Svg msg
+renderPolygon : Color -> Array { x : Number, y : Number } -> Number -> Number -> Number -> Number -> Number -> Svg msg
 renderPolygon color coordinates x y angle s alpha =
   Svg.polygon
-    (  points (List.foldl addPoint "" coordinates)
-    :: fill (renderColor color)
-    :: transform (renderTransform x y angle s)
-    :: renderAlpha alpha
+    ( [ points (Array.foldl addPoint "" coordinates)
+      , fill (renderColor color)
+      , transform (renderTransform x y angle s)
+      ] ++ renderAlpha alpha
     )
     []
+    
 
 
-addPoint : (Float, Float) -> String -> String
-addPoint (x,y) str =
+addPoint : { x : Float, y : Float } -> String -> String
+addPoint { x, y } str =
   str ++ String.fromFloat x ++ "," ++ String.fromFloat -y ++ " "
 
 
@@ -1654,11 +1665,11 @@ addPoint (x,y) str =
 renderWords : Color -> String -> Number -> Number -> Number -> Number -> Number -> Svg msg
 renderWords color string x y angle s alpha =
   text_
-    (  textAnchor "middle"
-    :: dominantBaseline "central"
-    :: fill (renderColor color)
-    :: transform (renderTransform x y angle s)
-    :: renderAlpha alpha
+    ( [ textAnchor "middle"
+      , dominantBaseline "central"
+      , fill (renderColor color)
+      , transform (renderTransform x y angle s)
+      ] ++ renderAlpha alpha
     )
     [ text string
     ]
@@ -1682,7 +1693,7 @@ renderColor color =
 -- RENDER ALPHA
 
 
-renderAlpha : Number -> List (Svg.Attribute msg)
+renderAlpha : Number -> Array (Svg.Attribute msg)
 renderAlpha alpha =
   if alpha == 1 then
     []

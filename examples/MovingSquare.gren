@@ -1,0 +1,17 @@
+module MovingSquare exposing (main)
+
+import Playground exposing (..)
+
+
+main =
+  game view update { x = 0, y = 0 }
+
+view computer { x, y } =
+  [ square blue 40
+      |> move x y
+  ]
+
+update computer { x, y } =
+  { x = x + toX computer.keyboard
+  , y = y + toY computer.keyboard
+  }

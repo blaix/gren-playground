@@ -1,0 +1,17 @@
+{
+    "platform": "browser",
+    "type": "package",
+    "name": "blaix/gren-playground",
+    "summary": "A fun way to create pictures, animations, and games.",
+    "license": "BSD-3-Clause",
+    "version": "1.0.3",
+    "exposed-modules": [
+        "Playground"
+    ],
+    "gren-version": "0.3.0 <= v < 0.4.0",
+    "dependencies": {
+        "gren-lang/browser": "3.0.0 <= v < 4.0.0",
+        "gren-lang/core": "4.0.1 <= v < 5.0.0"
+    },
+    "test-dependencies": {}
+}

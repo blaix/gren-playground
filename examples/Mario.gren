@@ -1,5 +1,6 @@
-import Playground exposing (..)
+module Mario exposing (main)
 
+import Playground exposing (..)
 
 
 -- MAIN
