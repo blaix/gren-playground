@@ -4,7 +4,7 @@
     "name": "blaix/gren-playground",
     "summary": "A fun way to create pictures, animations, and games.",
     "license": "BSD-3-Clause",
-    "version": "1.0.3",
+    "version": "1.0.0",
     "exposed-modules": [
         "Playground"
     ],
