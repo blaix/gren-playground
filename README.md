@@ -2,7 +2,9 @@
 
 Create pictures, animations, and games with Gren!
 
-This is the package I wanted when I was learning programming. Start by putting shapes on screen and work up to making games. I hope this package will be fun for a broad range of ages and backgrounds!
+This is a port of [elm-playground](https://package.elm-lang.org/packages/evancz/elm-playground/latest/).
+
+Start by putting shapes on screen and work up to making games. I hope this package will be fun for a broad range of ages and backgrounds!
 
 
 ## Pictures
