@@ -239,7 +239,8 @@ names used for all the different special keys! From there, you can use
 `Set.member "Control" computer.keyboard.keys`.
 
 [list]: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
-[member]: /packages/elm/core/latest/Set#member
+[member]: /package/gren-lang/core/latest/module/Set#member
+https://packages.gren-lang.org/package/gren-lang/core/version/4.0.1/module/Set#member
 -}
 type alias Keyboard =
   { up : Bool
@@ -294,17 +295,17 @@ This can be used to move characters around in games just like [`toX`](#toX):
     import Playground exposing (..)
 
     main =
-      game view update (0,0)
+      game view update { x = 0, y = 0 }
 
-    view computer (x,y) =
+    view computer { x, y } =
       [ square blue 40
           |> move x y
       ]
 
-    update computer (x,y) =
-      ( x + toX computer.keyboard
-      , y + toY computer.keyboard
-      )
+    update computer { x, y } =
+      { x = x + toX computer.keyboard
+      , y = y + toY computer.keyboard
+      }
 
 -}
 toY : Keyboard -> Number
@@ -316,30 +317,32 @@ toY keyboard =
 right at 1 pixel per update, but you will go up/right at 1.41421 pixels per
 update.
 
-So `toXY` turns the arrow keys into an `(x,y)` pair such that the distance is
+So `toXY` turns the arrow keys into an `{x,y}` pair such that the distance is
 normalized:
 
-    toXY { up = True , down = False, left = False, right = False, ... } == (1, 0)
-    toXY { up = True , down = False, left = False, right = True , ... } == (0.707, 0.707)
-    toXY { up = False, down = False, left = False, right = True , ... } == (0, 1)
+    toXY { up = True , down = False, left = False, right = False, ... } == { x = 1, y = 0 }
+    toXY { up = True , down = False, left = False, right = True , ... } == { x = 0.707, y = 0.707 }
+    toXY { up = False, down = False, left = False, right = True , ... } == { x = 0, y = 1 }
 
 Now when you go up/right, you are still going 1 pixel per update.
 
     import Playground exposing (..)
 
     main =
-      game view update (0,0)
+      game view update { x = 0, y = 0 }
 
-    view computer (x,y) =
+    view computer { x, y } =
       [ square green 40
           |> move x y
       ]
 
-    update computer (x,y) =
+    update computer { x, y } =
       let
-        (dx,dy) = toXY computer.keyboard
+        d = toXY computer.keyboard
       in
-      (x + dx, y + dy)
+      { x = x + d.x
+      , y = y + d.y
+      }
 
 -}
 toXY : Keyboard -> { x : Number, y : Number }
@@ -602,17 +605,17 @@ moves based on the arrow keys:
     import Playground exposing (..)
 
     main =
-      game view update (0,0)
+      game view update { x = 0, y = 0 }
 
-    view computer (x,y) =
+    view computer { x, y } =
       [ square red 40
           |> move x y
       ]
 
-    update computer (x,y) =
-      ( x + toX computer.keyboard
-      , y + toY computer.keyboard
-      )
+    update computer { x, y } =
+      { x = x + toX computer.keyboard
+      , y = y + toY computer.keyboard
+      }
 
 Notice that in the `update` we use information from the keyboard to update the
 `x` and `y` values. These building blocks let you make pretty fancy games!
@@ -983,11 +986,15 @@ octagon color radius =
 
     main =
       picture
-        [ polygon black [ (-10,-20), (0,100), (10,-20) ]
+        [ polygon black 
+            [ { x = -10, y = -20 }
+            , { x = 0, y = 100 }
+            , { x = 10, y = -20 }
+            ]
         ]
 
 **Note:** If you [`rotate`](#rotate) a polygon, it will always rotate around
-`(0,0)`. So it is best to build your shapes around that point, and then use
+`{ x = 0, y = 0 }`. So it is best to build your shapes around that point, and then use
 [`move`](#move) or [`group`](#group) so that rotation makes more sense.
 -}
 polygon : Color -> Array { x : Number, y : Number } -> Shape
