@@ -22,6 +22,8 @@ module Playground exposing
   , wave
   , zigzag
   --
+  , Probability
+  --
   , Computer
   , Mouse
   , Screen
@@ -66,7 +68,7 @@ module Playground exposing
 @docs Time, spin, wave, zigzag
 
 # Computer
-@docs Computer, Mouse, Screen, Keyboard, toX, toY, toXY
+@docs Computer, Mouse, Screen, Keyboard, toX, toY, toXY, Probability
 
 # Colors
 @docs Color, rgb, red, orange, yellow, green, blue, purple, brown
@@ -98,6 +100,7 @@ import Math exposing (..)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import Json.Decode as D
+import Random
 import Set
 import Task
 import Time
@@ -159,6 +162,7 @@ about your computer:
   - [`Keyboard`](#Keyboard) - Are the arrow keys down?
   - [`Screen`](#Screen) - How wide is the screen?
   - [`Time`](#Time) - What time is it right now?
+  - [`Probability`](#Probability) - Random number between 0 and 1
 
 So you can use expressions like `computer.mouse.x` and `computer.keyboard.enter`
 in games where you want some mouse or keyboard interaction.
@@ -168,6 +172,7 @@ type alias Computer =
   , keyboard : Keyboard
   , screen : Screen
   , time : Time
+  , probability : Probability
   }
 
 
@@ -406,6 +411,17 @@ Helpful when making an [`animation`](#animation) with functions like
 type Time = Time Time.Posix
 
 
+-- PROBABILITY
+
+{-| Random number between 0 and 1.
+
+Helpful for introducing randomness to your game.
+Maybe you want to start an enemy somewhere different each time:
+
+    enemyPosition = computer.screen.width * computer.probability
+-}
+type alias Probability = Float
+
 {-| Create an angle that cycles from 0 to 360 degrees over time.
 
 Here is an [`animation`](#animation) with a spinning triangle:
@@ -547,6 +563,7 @@ animationSubscriptions =
   Sub.batch
     [ E.onResize Resized
     , E.onAnimationFrame Tick
+    , Time.every 1000 TickProbability
     , E.onVisibilityChange VisibilityChanged
     ]
 
@@ -558,11 +575,12 @@ animationUpdate msg (Animation v s t as state) =
     VisibilityChanged vis  -> Animation vis s t
     GotViewport {viewport} -> Animation v (toScreen viewport.width viewport.height) t
     Resized w h            -> Animation v (toScreen (toFloat w) (toFloat h)) t
+    GotProbability _       -> state
+    TickProbability _      -> state
     KeyChanged _ _         -> state
     MouseMove _ _          -> state
     MouseClick             -> state
     MouseButton _          -> state
-
 
 
 -- GAME
@@ -636,9 +654,12 @@ game viewMemory updateMemory initialMemory =
       }
 
     update msg model =
-      { model = gameUpdate updateMemory msg model
-      , command = Cmd.none
-      }
+        let
+            updateResult = gameUpdate updateMemory msg model
+        in
+        { model = updateResult.model
+        , command = updateResult.command
+        }
 
     subscriptions (Game visibility _ _) =
       case visibility of
@@ -669,6 +690,7 @@ initialComputer =
   , keyboard = emptyKeyboard
   , screen = toScreen 600 600
   , time = Time (Time.millisToPosix 0)
+  , probability = 0.5
   }
 
 
@@ -688,6 +710,7 @@ gameSubscriptions =
     , E.onMouseDown (D.succeed (MouseButton True))
     , E.onMouseUp (D.succeed (MouseButton False))
     , E.onMouseMove (D.map2 MouseMove (D.field "pageX" D.float) (D.field "pageY" D.float))
+    , Time.every 500 TickProbability
     ]
 
 
@@ -698,7 +721,9 @@ gameSubscriptions =
 type Msg
   = KeyChanged Bool String
   | Tick Time.Posix
+  | TickProbability Time.Posix
   | GotViewport Dom.Viewport
+  | GotProbability Probability
   | Resized Int Int
   | VisibilityChanged E.Visibility
   | MouseMove Float Float
@@ -706,49 +731,83 @@ type Msg
   | MouseButton Bool
 
 
-gameUpdate : (Computer -> memory -> memory) -> Msg -> Game memory -> Game memory
+gameUpdate : (Computer -> memory -> memory) -> Msg -> Game memory -> { model : Game memory, command : Cmd Msg }
 gameUpdate updateMemory msg (Game vis memory computer) =
   case msg of
     Tick time ->
-      Game vis (updateMemory computer memory) <|
-        if computer.mouse.click
-        then { computer | time = Time time, mouse = mouseClick False computer.mouse }
-        else { computer | time = Time time }
-
-    GotViewport {viewport} ->
-      Game vis memory { computer | screen = toScreen viewport.width viewport.height }
-
-    Resized w h ->
-      Game vis memory { computer | screen = toScreen (toFloat w) (toFloat h) }
-
-    KeyChanged isDown key ->
-      Game vis memory { computer | keyboard = updateKeyboard isDown key computer.keyboard }
-
-    MouseMove pageX pageY ->
-      let
-        x = computer.screen.left + pageX
-        y = computer.screen.top - pageY
-      in
-      Game vis memory { computer | mouse = mouseMove x y computer.mouse }
-
-    MouseClick ->
-      Game vis memory { computer | mouse = mouseClick True computer.mouse }
-
-    MouseButton isDown ->
-      Game vis memory { computer | mouse = mouseDown isDown computer.mouse }
-
-    VisibilityChanged visibility ->
-      Game visibility memory
-        { computer
-            | keyboard = emptyKeyboard
-            , mouse =
-              { x = computer.mouse.x
-              , y = computer.mouse.y
-              , down = False
-              , click = False
-              }
+        { model = 
+            Game vis (updateMemory computer memory) <|
+                if computer.mouse.click
+                then { computer | time = Time time, mouse = mouseClick False computer.mouse }
+                else { computer | time = Time time }
+        , command = Cmd.none
+        }
+    
+    TickProbability _ ->
+        { model = Game vis memory computer
+        , command = Random.generate GotProbability (Random.float 0 1)
         }
 
+    GotViewport {viewport} ->
+        { model =
+            Game vis memory { computer | screen = toScreen viewport.width viewport.height }
+        , command = Cmd.none
+        }
+
+    GotProbability probability ->
+        { model = 
+            Game vis memory { computer | probability = probability }
+        , command = Cmd.none
+        }
+
+    Resized w h ->
+        { model =
+            Game vis memory { computer | screen = toScreen (toFloat w) (toFloat h) }
+        , command = Cmd.none
+        }
+
+    KeyChanged isDown key ->
+        { model =
+            Game vis memory { computer | keyboard = updateKeyboard isDown key computer.keyboard }
+        , command = Cmd.none
+        }
+
+    MouseMove pageX pageY ->
+        let
+            x = computer.screen.left + pageX
+            y = computer.screen.top - pageY
+        in
+        { model =
+            Game vis memory { computer | mouse = mouseMove x y computer.mouse }
+        , command = Cmd.none
+        }
+
+    MouseClick ->
+        { model =
+            Game vis memory { computer | mouse = mouseClick True computer.mouse }
+        , command = Cmd.none
+        }
+
+    MouseButton isDown ->
+        { model =
+            Game vis memory { computer | mouse = mouseDown isDown computer.mouse }
+        , command = Cmd.none
+        }
+
+    VisibilityChanged visibility ->
+        { model =
+            Game visibility memory
+                { computer
+                    | keyboard = emptyKeyboard
+                    , mouse =
+                      { x = computer.mouse.x
+                      , y = computer.mouse.y
+                      , down = False
+                      , click = False
+                      }
+                }
+        , command = Cmd.none
+        }
 
 
 -- SCREEN HELPERS
