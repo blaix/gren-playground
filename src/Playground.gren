@@ -1,6 +1,8 @@
 module Playground exposing
   ( picture
   , animation
+  --
+  , Game
   , game
   --
   , Shape
@@ -40,7 +42,7 @@ module Playground exposing
 {-|
 
 # Playgrounds
-@docs picture, animation, game
+@docs picture, animation, game, Game
 
 # Shapes
 @docs Shape, circle, oval, square, rectangle, triangle, pentagon, hexagon, octagon, polygon
@@ -654,6 +656,13 @@ game viewMemory updateMemory initialMemory =
     }
 
 
+{-| You only need this if you're adding a type signature to your main function.
+If you don't know what that means, that's ok, you can ignore this!
+-}
+type Game memory =
+  Game E.Visibility memory Computer
+
+
 initialComputer : Computer
 initialComputer =
   { mouse = { x = 0, y = 0, down = False, click = False }
@@ -684,10 +693,6 @@ gameSubscriptions =
 
 
 -- GAME HELPERS
-
-
-type Game memory =
-  Game E.Visibility memory Computer
 
 
 type Msg
@@ -1724,3 +1729,4 @@ renderTransform x y a s =
       "translate(" ++ String.fromFloat x ++ "," ++ String.fromFloat -y ++ ") rotate(" ++ String.fromFloat -a ++ ")"
     else
       "translate(" ++ String.fromFloat x ++ "," ++ String.fromFloat -y ++ ") rotate(" ++ String.fromFloat -a ++ ") scale(" ++ String.fromFloat s ++ ")"
+
