@@ -1,7 +1,8 @@
 # Changelog
 
-## Next
+## 2.0.0
 
+* Add `Computer.probability` for randomness.
 * Expose `Game` type so you can add type signatures to `main`.
 
 ## 1.0.2
