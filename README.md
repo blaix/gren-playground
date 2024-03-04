@@ -79,9 +79,9 @@ I started off trying to make Pong, then worked on games like Breakout and Space 
 
 ## Examples
 
-See the `examples/` directory for some examples.
+See the [`examples/`](https://github.com/blaix/gren-playground/tree/main/examples) directory for some usage examples.
 
-You can run them like this:
+You can clone the repo and run them from that directory like this:
 
 ```bash
 npm install
