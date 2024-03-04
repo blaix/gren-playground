@@ -1,0 +1,11 @@
+module RotatingTriangle exposing (main)
+
+import Playground exposing (..)
+
+main =
+  animation view
+
+view time =
+  [ triangle orange 50
+      |> rotate (spin 8 time)
+  ]
