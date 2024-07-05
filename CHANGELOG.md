@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.0
+
+* Update to gren 0.4
+
 ## 2.0.0
 
 * Add `Computer.probability` for randomness.

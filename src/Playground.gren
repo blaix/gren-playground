@@ -866,7 +866,7 @@ updateKeyboard isDown key keyboard =
   let
     keys =
       if isDown then
-        Set.insert key keyboard.keys
+        Set.set key keyboard.keys
       else
         Set.remove key keyboard.keys
   in
