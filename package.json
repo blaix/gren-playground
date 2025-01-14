@@ -1,9 +1,0 @@
-{
-  "private": true,
-  "dependencies": {
-    "gren-lang": "^0.4.4"
-  },
-  "devDependencies": {
-    "gren-packages": "^3.1.0"
-  }
-}

@@ -81,11 +81,10 @@ I started off trying to make Pong, then worked on games like Breakout and Space 
 
 See the [`examples/`](https://github.com/blaix/gren-playground/tree/main/examples) directory for some usage examples.
 
-You can clone the repo and run them from that directory like this:
+You can run them by compiling the specific module and opening the resulting html file:
 
 ```bash
-npm install
 cd examples
-npx gren make Mario.gren
+gren make Mario.gren
 open index.html
 ```
