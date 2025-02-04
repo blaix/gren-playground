@@ -524,11 +524,11 @@ animation : (Time -> Array Shape) -> Program {} Animation Msg
 animation viewFrame =
   let
     init {} =
-      { model = Animation E.Visible (toScreen 600 600) (Time (Time.millisToPosix 0))
+      { model = Animation { visibility = E.Visible, screen = (toScreen 600 600), time = (Time (Time.millisToPosix 0)) }
       , command = Task.perform GotViewport Dom.getViewport
       }
 
-    view (Animation _ screen time) =
+    view (Animation { screen, time }) =
       { title = "Playground"
       , body = [ render screen (viewFrame time) ]
       }
@@ -538,8 +538,8 @@ animation viewFrame =
       , command = Cmd.none
       }
 
-    subscriptions (Animation visibility _ _) =
-      case visibility of
+    subscriptions (Animation { visibility }) =
+      when visibility is
         E.Hidden ->
           E.onVisibilityChange VisibilityChanged
 
@@ -555,13 +555,17 @@ animation viewFrame =
 
 
 type Animation =
-  Animation E.Visibility Screen Time
+  Animation 
+    { visibility : E.Visibility
+    , screen : Screen
+    , time : Time
+    }
 
 
 animationSubscriptions : Sub Msg
 animationSubscriptions =
   Sub.batch
-    [ E.onResize Resized
+    [ E.onResize (\w h -> Resized { width = w, height = h })
     , E.onAnimationFrame Tick
     , Time.every 1000 TickProbability
     , E.onVisibilityChange VisibilityChanged
@@ -569,16 +573,17 @@ animationSubscriptions =
 
 
 animationUpdate : Msg -> Animation -> Animation
-animationUpdate msg (Animation v s t as state) =
-  case msg of
-    Tick posix             -> Animation v s (Time posix)
-    VisibilityChanged vis  -> Animation vis s t
-    GotViewport {viewport} -> Animation v (toScreen viewport.width viewport.height) t
-    Resized w h            -> Animation v (toScreen (toFloat w) (toFloat h)) t
+animationUpdate msg (Animation { visibility = v, screen = s, time = t } as state) =
+  when msg is
+    Tick posix             -> Animation { visibility = v, screen = s, time = (Time posix) }
+    VisibilityChanged vis  -> Animation { visibility = vis, screen = s, time = t }
+    GotViewport {viewport} -> Animation { visibility = v, screen = (toScreen viewport.width viewport.height), time = t }
+    Resized { width = w, height = h } -> Animation { visibility = v, screen = (toScreen (toFloat w) (toFloat h)), time = t }
     GotProbability _       -> state
     TickProbability _      -> state
-    KeyChanged _ _         -> state
-    MouseMove _ _          -> state
+    KeyUp _                -> state
+    KeyDown _              -> state
+    MouseMove _            -> state
     MouseClick             -> state
     MouseButton _          -> state
 
@@ -644,11 +649,11 @@ game : (Computer -> memory -> Array Shape) -> (Computer -> memory -> memory) -> 
 game viewMemory updateMemory initialMemory =
   let
     init {} =
-      { model = Game E.Visible initialMemory initialComputer
+      { model = Game { visibility = E.Visible, memory = initialMemory, computer = initialComputer }
       , command = Task.perform GotViewport Dom.getViewport
       }
 
-    view (Game _ memory computer) =
+    view (Game { memory, computer }) =
       { title = "Playground"
       , body = [ render computer.screen (viewMemory computer memory) ]
       }
@@ -661,8 +666,8 @@ game viewMemory updateMemory initialMemory =
         , command = updateResult.command
         }
 
-    subscriptions (Game visibility _ _) =
-      case visibility of
+    subscriptions (Game { visibility }) =
+      when visibility is
         E.Hidden ->
           E.onVisibilityChange VisibilityChanged
 
@@ -681,7 +686,11 @@ game viewMemory updateMemory initialMemory =
 If you don't know what that means, that's ok, you can ignore this!
 -}
 type Game memory =
-  Game E.Visibility memory Computer
+  Game 
+    { visibility : E.Visibility
+    , memory : memory
+    , computer : Computer
+    }
 
 
 initialComputer : Computer
@@ -701,15 +710,15 @@ initialComputer =
 gameSubscriptions : Sub Msg
 gameSubscriptions =
   Sub.batch
-    [ E.onResize Resized
-    , E.onKeyUp (D.map (KeyChanged False) (D.field "key" D.string))
-    , E.onKeyDown (D.map (KeyChanged True) (D.field "key" D.string))
+    [ E.onResize (\w h -> Resized { width = w, height = h })
+    , E.onKeyUp (D.map KeyUp (D.field "key" D.string))
+    , E.onKeyDown (D.map KeyDown (D.field "key" D.string))
     , E.onAnimationFrame Tick
     , E.onVisibilityChange VisibilityChanged
     , E.onClick (D.succeed MouseClick)
     , E.onMouseDown (D.succeed (MouseButton True))
     , E.onMouseUp (D.succeed (MouseButton False))
-    , E.onMouseMove (D.map2 MouseMove (D.field "pageX" D.float) (D.field "pageY" D.float))
+    , E.onMouseMove (D.map2 (\x y -> MouseMove { x = x, y = y }) (D.field "pageX" D.float) (D.field "pageY" D.float))
     , Time.every 500 TickProbability
     ]
 
@@ -719,92 +728,150 @@ gameSubscriptions =
 
 
 type Msg
-  = KeyChanged Bool String
+  = KeyUp String
+  | KeyDown String
   | Tick Time.Posix
   | TickProbability Time.Posix
   | GotViewport Dom.Viewport
   | GotProbability Probability
-  | Resized Int Int
+  | Resized { width : Int, height: Int }
   | VisibilityChanged E.Visibility
-  | MouseMove Float Float
+  | MouseMove { x : Float, y : Float }
   | MouseClick
   | MouseButton Bool
 
 
 gameUpdate : (Computer -> memory -> memory) -> Msg -> Game memory -> { model : Game memory, command : Cmd Msg }
-gameUpdate updateMemory msg (Game vis memory computer) =
-  case msg of
+gameUpdate updateMemory msg (Game { visibility = vis, memory = memory, computer = computer }) =
+  when msg is
     Tick time ->
         { model = 
-            Game vis (updateMemory computer memory) <|
-                if computer.mouse.click
-                then { computer | time = Time time, mouse = mouseClick False computer.mouse }
-                else { computer | time = Time time }
+            Game 
+                { visibility = vis
+                , memory = (updateMemory computer memory)
+                , computer =
+                    if computer.mouse.click
+                    then { computer | time = Time time, mouse = mouseClick False computer.mouse }
+                    else { computer | time = Time time }
+                }
         , command = Cmd.none
         }
     
     TickProbability _ ->
-        { model = Game vis memory computer
+        { model = 
+            Game { visibility = vis, memory = memory, computer = computer }
         , command = Random.generate GotProbability (Random.float 0 1)
         }
 
     GotViewport {viewport} ->
         { model =
-            Game vis memory { computer | screen = toScreen viewport.width viewport.height }
+            Game 
+                { visibility = vis
+                , memory = memory
+                , computer = 
+                    { computer | screen = toScreen viewport.width viewport.height }
+                }
         , command = Cmd.none
         }
 
     GotProbability probability ->
         { model = 
-            Game vis memory { computer | probability = probability }
+            Game 
+                { visibility = vis
+                , memory = memory
+                , computer = { computer | probability = probability }
+                }
         , command = Cmd.none
         }
 
-    Resized w h ->
+    Resized { width = w, height = h } ->
         { model =
-            Game vis memory { computer | screen = toScreen (toFloat w) (toFloat h) }
+            Game 
+                { visibility = vis
+                , memory = memory
+                , computer = 
+                    { computer 
+                        | screen = toScreen (toFloat w) (toFloat h)
+                    }
+                }
         , command = Cmd.none
         }
 
-    KeyChanged isDown key ->
+    KeyUp key ->
         { model =
-            Game vis memory { computer | keyboard = updateKeyboard isDown key computer.keyboard }
+            Game
+                { visibility = vis
+                , memory = memory 
+                , computer = 
+                    { computer 
+                        | keyboard = updateKeyboard False key computer.keyboard
+                    }
+                }
         , command = Cmd.none
         }
 
-    MouseMove pageX pageY ->
+    KeyDown key ->
+        { model =
+            Game
+                { visibility = vis
+                , memory = memory 
+                , computer = 
+                    { computer 
+                        | keyboard = updateKeyboard True key computer.keyboard
+                    }
+                }
+        , command = Cmd.none
+        }
+
+    MouseMove { x = pageX, y = pageY } ->
         let
             x = computer.screen.left + pageX
             y = computer.screen.top - pageY
         in
         { model =
-            Game vis memory { computer | mouse = mouseMove x y computer.mouse }
+            Game 
+                { visibility = vis
+                , memory = memory
+                , computer = { computer | mouse = mouseMove x y computer.mouse }
+                }
         , command = Cmd.none
         }
 
     MouseClick ->
         { model =
-            Game vis memory { computer | mouse = mouseClick True computer.mouse }
+            Game 
+                { visibility = vis
+                , memory = memory
+                , computer = { computer | mouse = mouseClick True computer.mouse }
+                }
         , command = Cmd.none
         }
 
     MouseButton isDown ->
         { model =
-            Game vis memory { computer | mouse = mouseDown isDown computer.mouse }
+            Game
+                { visibility = vis
+                , memory = memory 
+                , computer = { computer | mouse = mouseDown isDown computer.mouse }
+                }
         , command = Cmd.none
         }
 
     VisibilityChanged visibility ->
         { model =
-            Game visibility memory
-                { computer
-                    | keyboard = emptyKeyboard
-                    , mouse =
-                      { x = computer.mouse.x
-                      , y = computer.mouse.y
-                      , down = False
-                      , click = False
-                      }
+            Game 
+                { visibility = visibility
+                , memory = memory
+                , computer = 
+                    { computer
+                        | keyboard = emptyKeyboard
+                        , mouse =
+                          { x = computer.mouse.x
+                          , y = computer.mouse.y
+                          , down = False
+                          , click = False
+                          }
+                    }
                 }
         , command = Cmd.none
         }
@@ -870,7 +937,7 @@ updateKeyboard isDown key keyboard =
       else
         Set.remove key keyboard.keys
   in
-  case key of
+  when key is
     " "          -> { keyboard | keys = keys, space = isDown }
     "Enter"      -> { keyboard | keys = keys, enter = isDown }
     "Shift"      -> { keyboard | keys = keys, shift = isDown }
@@ -893,22 +960,23 @@ Read on to see examples of [`circle`](#circle), [`rectangle`](#rectangle),
 -}
 type Shape =
   Shape
-    Number -- x
-    Number -- y
-    Number -- angle
-    Number -- scale
-    Number -- alpha
-    Form
+    { x : Number
+    , y : Number
+    , angle : Number
+    , scale : Number
+    , alpha : Number
+    , form : Form
+    }
 
 
 type Form
-  = Circle Color Number
-  | Oval Color Number Number
-  | Rectangle Color Number Number
-  | Ngon Color Int Number
-  | Polygon Color (Array { x : Number, y : Number })
-  | Image Number Number String
-  | Words Color String
+  = Circle { color : Color, radius : Number }
+  | Oval { color : Color, width : Number, height : Number }
+  | Rectangle { color : Color, width : Number, height : Number }
+  | Ngon { color : Color, sides : Int, radius : Number }
+  | Polygon { color : Color, points : (Array { x : Number, y : Number }) }
+  | Image { width : Number, height : Number, src : String }
+  | Words { color : Color, string : String }
   | Group (Array Shape)
 
 
@@ -922,7 +990,14 @@ the circle.
 -}
 circle : Color -> Number -> Shape
 circle color radius =
-  Shape 0 0 0 1 1 (Circle color radius)
+  Shape 
+    { x = 0
+    , y = 0
+    , angle = 0
+    , scale = 1
+    , alpha = 1
+    , form = (Circle { color = color, radius = radius })
+    }
 
 
 {-| Make ovals:
@@ -934,7 +1009,14 @@ is 200 pixels wide and 100 pixels tall.
 -}
 oval : Color -> Number -> Number -> Shape
 oval color width height =
-  Shape 0 0 0 1 1 (Oval color width height)
+  Shape 
+    { x = 0
+    , y = 0
+    , angle = 0
+    , scale = 1
+    , alpha = 1
+    , form = (Oval { color = color, width = width, height = height })
+    }
 
 
 {-| Make squares. Here are two squares combined to look like an empty box:
@@ -952,7 +1034,14 @@ be 80 pixels by 80 pixels.
 -}
 square : Color -> Number -> Shape
 square color n =
-  Shape 0 0 0 1 1 (Rectangle color n n)
+  Shape 
+    { x = 0
+    , y = 0
+    , angle = 0
+    , scale = 1
+    , alpha = 1
+    , form = (Rectangle { color = color, width = n, height = n })
+    }
 
 
 {-| Make rectangles. This example makes a red cross:
@@ -970,7 +1059,14 @@ part of the cross, the thinner and taller part.
 -}
 rectangle : Color -> Number -> Number -> Shape
 rectangle color width height =
-  Shape 0 0 0 1 1 (Rectangle color width height)
+  Shape 
+    { x = 0
+    , y = 0 
+    , angle = 0 
+    , scale = 1 
+    , alpha = 1 
+    , form = (Rectangle { color = color, width = width, height = height })
+    }
 
 
 {-| Make triangles. So if you wanted to draw the Egyptian pyramids, you could
@@ -988,7 +1084,14 @@ the pyramid is `200`. Pretty big!
 -}
 triangle : Color -> Number -> Shape
 triangle color radius =
-  Shape 0 0 0 1 1 (Ngon color 3 radius)
+  Shape 
+    { x = 0 
+    , y = 0 
+    , angle = 0 
+    , scale = 1 
+    , alpha = 1 
+    , form = (Ngon { color = color, sides = 3, radius = radius })
+    }
 
 
 {-| Make pentagons:
@@ -1005,7 +1108,14 @@ of the five points is 100 pixels.
 -}
 pentagon : Color -> Number -> Shape
 pentagon color radius =
-  Shape 0 0 0 1 1 (Ngon color 5 radius)
+  Shape 
+    { x = 0 
+    , y = 0 
+    , angle = 0 
+    , scale = 1 
+    , alpha = 1 
+    , form = (Ngon { color = color, sides = 5, radius = radius })
+    }
 
 
 {-| Make hexagons:
@@ -1024,7 +1134,14 @@ honeycomb pattern!
 -}
 hexagon : Color -> Number -> Shape
 hexagon color radius =
-  Shape 0 0 0 1 1 (Ngon color 6 radius)
+  Shape 
+    { x = 0 
+    , y = 0 
+    , angle = 0 
+    , scale = 1 
+    , alpha = 1 
+    , form = (Ngon { color = color, sides = 6, radius = radius })
+    }
 
 
 {-| Make octogons:
@@ -1041,7 +1158,14 @@ from the center.
 -}
 octagon : Color -> Number -> Shape
 octagon color radius =
-  Shape 0 0 0 1 1 (Ngon color 8 radius)
+  Shape 
+    { x = 0 
+    , y = 0 
+    , angle = 0 
+    , scale = 1 
+    , alpha = 1 
+    , form = (Ngon { color = color, sides = 8, radius = radius })
+    }
 
 
 {-| Make any shape you want! Here is a very thin triangle:
@@ -1063,7 +1187,14 @@ octagon color radius =
 -}
 polygon : Color -> Array { x : Number, y : Number } -> Shape
 polygon color points =
-  Shape 0 0 0 1 1 (Polygon color points)
+  Shape 
+  { x = 0 
+  , y = 0 
+  , angle = 0 
+  , scale = 1 
+  , alpha = 1 
+  , form = (Polygon { color = color, points = points })
+  }
 
 
 {-| Add some image from the internet:
@@ -1079,7 +1210,14 @@ You provide the width, height, and then the URL of the image you want to show.
 -}
 image : Number -> Number -> String -> Shape
 image w h src =
-  Shape 0 0 0 1 1 (Image w h src)
+  Shape 
+    { x = 0 
+    , y = 0 
+    , angle = 0 
+    , scale = 1 
+    , alpha = 1 
+    , form = (Image { width = w, height = h, src = src })
+    }
 
 
 {-| Show some words!
@@ -1095,7 +1233,14 @@ You can use [`scale`](#scale) to make the words bigger or smaller.
 -}
 words : Color -> String -> Shape
 words color string =
-  Shape 0 0 0 1 1 (Words color string)
+  Shape 
+    { x = 0 
+    , y = 0 
+    , angle = 0 
+    , scale = 1 
+    , alpha = 1 
+    , form = (Words { color = color, string = string })
+    }
 
 
 {-| Put shapes together so you can [`move`](#move) and [`rotate`](#rotate)
@@ -1128,8 +1273,14 @@ them as a group. Maybe you want to put a bunch of stars in the sky:
 -}
 group : Array Shape -> Shape
 group shapes =
-  Shape 0 0 0 1 1 (Group shapes)
-
+  Shape 
+    { x = 0 
+    , y = 0 
+    , angle = 0 
+    , scale = 1 
+    , alpha = 1 
+    , form = (Group shapes)
+    }
 
 
 -- TRANSFORMS
@@ -1152,8 +1303,12 @@ group shapes =
         ]
 -}
 move : Number -> Number -> Shape -> Shape
-move dx dy (Shape x y a s o f) =
-  Shape (x + dx) (y + dy) a s o f
+move dx dy (Shape attrs) =
+  Shape 
+    { attrs
+        | x = (attrs.x + dx)
+        , y = (attrs.y + dy)
+    }
 
 
 {-| Move a shape up by some number of pixels. So if you wanted to make a tree
@@ -1187,8 +1342,8 @@ above the ground, you could move the sky up and the ground down:
         ]
 -}
 moveDown : Number -> Shape -> Shape
-moveDown dy (Shape x y a s o f) =
-  Shape x (y - dy) a s o f
+moveDown dy (Shape attrs) =
+  Shape { attrs | y = attrs.y - dy }
 
 
 {-| Move shapes to the left.
@@ -1203,8 +1358,8 @@ moveDown dy (Shape x y a s o f) =
         ]
 -}
 moveLeft : Number -> Shape -> Shape
-moveLeft dx (Shape x y a s o f) =
-  Shape (x - dx) y a s o f
+moveLeft dx (Shape attrs) =
+  Shape { attrs | x = attrs.x - dx }
 
 
 {-| Move shapes to the right.
@@ -1239,8 +1394,8 @@ moves back and forth:
 Using `moveX` feels a bit nicer here because the movement may be positive or negative.
 -}
 moveX : Number -> Shape -> Shape
-moveX dx (Shape x y a s o f) =
-  Shape (x + dx) y a s o f
+moveX dx (Shape attrs) =
+  Shape { attrs | x = attrs.x + dx }
 
 
 {-| Move the `y` coordinate of a shape by some amount. Maybe you want to make
@@ -1263,8 +1418,8 @@ Using `moveY` feels a bit nicer when setting things relative to the bottom or
 top of the screen, since the values are negative sometimes.
 -}
 moveY : Number -> Shape -> Shape
-moveY dy (Shape x y a s o f) =
-  Shape x (y + dy) a s o f
+moveY dy (Shape attrs) =
+  Shape { attrs | y = attrs.y + dy }
 
 
 {-| Make a shape bigger or smaller. So if you wanted some [`words`](#words) to
@@ -1279,8 +1434,8 @@ be larger, you could say:
         ]
 -}
 scale : Number -> Shape -> Shape
-scale ns (Shape x y a s o f) =
-  Shape x y a (s * ns) o f
+scale ns (Shape attrs) =
+  Shape { attrs | scale = attrs.scale * ns }
 
 
 {-| Rotate shapes in degrees.
@@ -1297,8 +1452,8 @@ The degrees go **counter-clockwise** to match the direction of the
 [unit circle](https://en.wikipedia.org/wiki/Unit_circle).
 -}
 rotate : Number -> Shape -> Shape
-rotate da (Shape x y a s o f) =
-  Shape x y (a + da) s o f
+rotate da (Shape attrs) =
+  Shape { attrs | angle = attrs.angle + da }
 
 
 {-| Fade a shape. This lets you make shapes see-through or even completely
@@ -1319,8 +1474,8 @@ The number has to be between `0` and `1`, where `0` is totally transparent
 and `1` is completely solid.
 -}
 fade : Number -> Shape -> Shape
-fade o (Shape x y a s _ f) =
-  Shape x y a s o f
+fade o (Shape attrs) =
+  Shape { attrs | alpha = o }
 
 
 
@@ -1338,7 +1493,7 @@ and `darkYellow`.
 -}
 type Color
   = Hex String
-  | Rgb Int Int Int
+  | Rgb { red : Int, green : Int, blue : Int }
 
 
 {-|-}
@@ -1557,7 +1712,7 @@ colors, click on the color previews to get their RGB values.
 -}
 rgb : Number -> Number -> Number -> Color
 rgb r g b =
-  Rgb (colorClamp r) (colorClamp g) (colorClamp b)
+  Rgb { red = (colorClamp r), green = (colorClamp g), blue = (colorClamp b) }
 
 
 colorClamp : Number -> Int
@@ -1591,27 +1746,27 @@ render screen shapes =
 -- TODO try adding Svg.Lazy to renderShape
 --
 renderShape : Shape -> Svg msg
-renderShape (Shape x y angle s alpha form) =
-  case form of
-    Circle color radius ->
+renderShape (Shape { x = x, y = y, angle = angle, scale = s, alpha = alpha, form = form }) =
+  when form is
+    Circle { color, radius } ->
       renderCircle color radius x y angle s alpha
 
-    Oval color width height ->
+    Oval { color, width, height } ->
       renderOval color width height x y angle s alpha
 
-    Rectangle color width height ->
+    Rectangle { color, width, height } ->
       renderRectangle color width height x y angle s alpha
 
-    Ngon color n radius ->
-      renderNgon color n radius x y angle s alpha
+    Ngon { color, sides, radius } ->
+      renderNgon color sides radius x y angle s alpha
 
-    Polygon color points ->
+    Polygon { color, points } ->
       renderPolygon color points x y angle s alpha
 
-    Image width height src ->
+    Image { width, height, src } ->
       renderImage width height src x y angle s alpha
 
-    Words color string ->
+    Words { color, string } ->
       renderWords color string x y angle s alpha
 
     Group shapes ->
@@ -1752,11 +1907,11 @@ renderWords color string x y angle s alpha =
 
 renderColor : Color -> String
 renderColor color =
-  case color of
+  when color is
     Hex str ->
       str
 
-    Rgb r g b ->
+    Rgb { red = r, green = g, blue = b } ->
       "rgb(" ++ String.fromInt r ++ "," ++ String.fromInt g ++ "," ++ String.fromInt b ++ ")"
 
 

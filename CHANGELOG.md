@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.0.0
+
+* Update to gren 0.5
+
 ## 3.0.0
 
 * Update to gren 0.4
